@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchExchangeRates } from './services/api';
+import { fetchExchangeRates, fetchLatestRate } from './services/api';
 import { calculateTrend } from './utils/prediction';
 import { RateChart } from './components/RateChart';
 import { MarketPrediction } from './components/MarketPrediction';
@@ -31,29 +31,44 @@ function App() {
       setLoading(true);
 
       // Fetch both currencies in parallel
-      const [eurData, usdData] = await Promise.all([
+      const [eurData, usdData, latestEur, latestUsd] = await Promise.all([
         fetchExchangeRates(days, 'EUR'),
-        fetchExchangeRates(days, 'USD')
+        fetchExchangeRates(days, 'USD'),
+        fetchLatestRate('EUR'),
+        fetchLatestRate('USD')
       ]);
 
+      // Helper to append latest rate if it's newer
+      const mergeLatest = (history: typeof eurData, latest: typeof latestEur) => {
+        if (!latest || history.length === 0) return history;
+        const lastDate = history[history.length - 1].date;
+        if (latest.date > lastDate) {
+          return [...history, latest];
+        }
+        return history;
+      };
+
+      const finalEurData = mergeLatest(eurData, latestEur);
+      const finalUsdData = mergeLatest(usdData, latestUsd);
+
       // Calculate stats for EUR
-      if (eurData.length > 0) {
-        setEurTrend(calculateTrend(eurData));
-        setEurCurrent(eurData[eurData.length - 1].rate);
+      if (finalEurData.length > 0) {
+        setEurTrend(calculateTrend(finalEurData));
+        setEurCurrent(finalEurData[finalEurData.length - 1].rate);
       }
 
       // Calculate stats for USD
-      if (usdData.length > 0) {
-        setUsdTrend(calculateTrend(usdData));
-        setUsdCurrent(usdData[usdData.length - 1].rate);
+      if (finalUsdData.length > 0) {
+        setUsdTrend(calculateTrend(finalUsdData));
+        setUsdCurrent(finalUsdData[finalUsdData.length - 1].rate);
       }
 
       // Merge data
       // Use EUR dates as the source of truth for dates (assuming mostly same trading days)
       const merged: CombinedDataPoint[] = [];
-      const usdMap = new Map(usdData.map(d => [d.date, d.rate]));
+      const usdMap = new Map(finalUsdData.map(d => [d.date, d.rate]));
 
-      eurData.forEach(eurPoint => {
+      finalEurData.forEach(eurPoint => {
         const usdRate = usdMap.get(eurPoint.date);
         if (usdRate !== undefined) {
           merged.push({
