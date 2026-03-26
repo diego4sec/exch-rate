@@ -5,7 +5,7 @@ import App from './App';
 import * as api from './services/api';
 
 // Recharts uses ResizeObserver which isn't available in jsdom
-global.ResizeObserver = class {
+globalThis.ResizeObserver = class {
   observe() {}
   unobserve() {}
   disconnect() {}
