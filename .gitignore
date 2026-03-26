@@ -29,3 +29,10 @@ dist-ssr
 # Environment
 .env
 .env.local
+.env.*.local
+
+# Test coverage
+coverage
+
+# TypeScript build info
+*.tsbuildinfo

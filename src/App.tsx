@@ -9,12 +9,15 @@ interface CombinedDataPoint {
   date: string;
   EUR: number;
   USD: number;
+  [key: string]: string | number;
 }
 
 function App() {
   const [days, setDays] = useState(60);
+  const [retryKey, setRetryKey] = useState(0);
   const [data, setData] = useState<CombinedDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // EUR State
   const [eurTrend, setEurTrend] = useState<'UP' | 'DOWN' | 'STABLE'>('STABLE');
@@ -27,67 +30,78 @@ function App() {
   const periodOptions = [7, 14, 21, 28, 30, 60, 90, 180, 365];
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadData = async () => {
       setLoading(true);
+      setError(null);
 
-      // Fetch both currencies in parallel
-      const [eurData, usdData, latestEur, latestUsd] = await Promise.all([
-        fetchExchangeRates(days, 'EUR'),
-        fetchExchangeRates(days, 'USD'),
-        fetchLatestRate('EUR'),
-        fetchLatestRate('USD')
-      ]);
+      try {
+        // Fetch both currencies in parallel
+        const [eurData, usdData, latestEur, latestUsd] = await Promise.all([
+          fetchExchangeRates(days, 'EUR'),
+          fetchExchangeRates(days, 'USD'),
+          fetchLatestRate('EUR'),
+          fetchLatestRate('USD')
+        ]);
 
-      // Helper to append latest rate if it's newer
-      const mergeLatest = (history: typeof eurData, latest: typeof latestEur) => {
-        if (!latest || history.length === 0) return history;
-        const lastDate = history[history.length - 1].date;
-        if (latest.date > lastDate) {
-          return [...history, latest];
+        if (!isMounted) return;
+
+        // Helper to append latest rate if it's newer
+        const mergeLatest = (history: typeof eurData, latest: typeof latestEur) => {
+          if (!latest || history.length === 0) return history;
+          const lastDate = history[history.length - 1].date;
+          if (latest.date > lastDate) {
+            return [...history, latest];
+          }
+          return history;
+        };
+
+        const finalEurData = mergeLatest(eurData, latestEur);
+        const finalUsdData = mergeLatest(usdData, latestUsd);
+
+        // Calculate stats for EUR
+        if (finalEurData.length > 0) {
+          setEurTrend(calculateTrend(finalEurData));
+          setEurCurrent(finalEurData[finalEurData.length - 1].rate);
         }
-        return history;
-      };
 
-      const finalEurData = mergeLatest(eurData, latestEur);
-      const finalUsdData = mergeLatest(usdData, latestUsd);
-
-      // Calculate stats for EUR
-      if (finalEurData.length > 0) {
-        setEurTrend(calculateTrend(finalEurData));
-        setEurCurrent(finalEurData[finalEurData.length - 1].rate);
-      }
-
-      // Calculate stats for USD
-      if (finalUsdData.length > 0) {
-        setUsdTrend(calculateTrend(finalUsdData));
-        setUsdCurrent(finalUsdData[finalUsdData.length - 1].rate);
-      }
-
-      // Merge data
-      // Use EUR dates as the source of truth for dates (assuming mostly same trading days)
-      const merged: CombinedDataPoint[] = [];
-      const usdMap = new Map(finalUsdData.map(d => [d.date, d.rate]));
-
-      finalEurData.forEach(eurPoint => {
-        const usdRate = usdMap.get(eurPoint.date);
-        if (usdRate !== undefined) {
-          merged.push({
-            date: eurPoint.date,
-            EUR: eurPoint.rate,
-            USD: usdRate
-          });
+        // Calculate stats for USD
+        if (finalUsdData.length > 0) {
+          setUsdTrend(calculateTrend(finalUsdData));
+          setUsdCurrent(finalUsdData[finalUsdData.length - 1].rate);
         }
-      });
 
-      // Filter for 2-day interval, ensuring the latest data point is included
-      const filteredData = merged.filter((_, index) => (merged.length - 1 - index) % 2 === 0);
+        // Merge data — use EUR dates as the source of truth
+        const merged: CombinedDataPoint[] = [];
+        const usdMap = new Map(finalUsdData.map(d => [d.date, d.rate]));
 
-      setData(filteredData);
-      setLoading(false);
+        finalEurData.forEach(eurPoint => {
+          const usdRate = usdMap.get(eurPoint.date);
+          if (usdRate !== undefined) {
+            merged.push({
+              date: eurPoint.date,
+              EUR: eurPoint.rate,
+              USD: usdRate
+            });
+          }
+        });
+
+        // Filter for 2-day interval, ensuring the latest data point is included
+        const filteredData = merged.filter((_, index) => (merged.length - 1 - index) % 2 === 0);
+
+        setData(filteredData);
+      } catch {
+        if (isMounted) setError('Failed to load exchange rate data. Please try again.');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     };
 
     loadData();
-  }, [days]);
+
+    return () => { isMounted = false; };
+  }, [days, retryKey]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 font-sans">
@@ -150,6 +164,16 @@ function App() {
             {loading ? (
               <div className="h-[400px] flex items-center justify-center text-gray-500">
                 Loading data...
+              </div>
+            ) : error ? (
+              <div className="h-[400px] flex flex-col items-center justify-center gap-4 text-gray-400">
+                <p>{error}</p>
+                <button
+                  onClick={() => setRetryKey(k => k + 1)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
+                >
+                  Retry
+                </button>
               </div>
             ) : (
               <RateChart

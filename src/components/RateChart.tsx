@@ -17,7 +17,7 @@ interface LineConfig {
 }
 
 interface RateChartProps {
-    data: any[];
+    data: Record<string, string | number>[];
     lines?: LineConfig[];
 }
 

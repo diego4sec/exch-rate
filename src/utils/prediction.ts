@@ -17,7 +17,9 @@ export const calculateTrend = (data: ExchangeRate[]): 'UP' | 'DOWN' | 'STABLE' =
         sumXX += index * index;
     });
 
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const denominator = n * sumXX - sumX * sumX;
+    if (denominator === 0) return 'STABLE';
+    const slope = (n * sumXY - sumX * sumY) / denominator;
 
     if (slope > 0.001) return 'UP';
     if (slope < -0.001) return 'DOWN';
