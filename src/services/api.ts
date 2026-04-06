@@ -6,7 +6,7 @@ export interface ExchangeRate {
     rate: number;
 }
 
-const FRANKFURTER_API = import.meta.env.VITE_FRANKFURTER_API ?? 'https://api.frankfurter.app';
+const FRANKFURTER_API = import.meta.env.VITE_FRANKFURTER_API ?? 'https://api.frankfurter.dev/v1';
 const OPEN_ER_API = import.meta.env.VITE_OPEN_ER_API ?? 'https://open.er-api.com';
 
 export const fetchExchangeRates = async (days: number = 60, baseCurrency: string = 'EUR'): Promise<ExchangeRate[]> => {
